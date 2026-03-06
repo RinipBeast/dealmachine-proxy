@@ -19,6 +19,11 @@ app.use(cors({
 app.use(express.json({ limit: '2mb' }));
 
 const DM_API = 'https://api.dealmachine.com';
+const DM_HEADERS = {
+  'Content-Type': 'application/json',
+  'Accept': 'application/json',
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+};
 
 /**
  * GET /api/lists?token=xxx
@@ -31,11 +36,11 @@ app.get('/api/lists', async (req, res) => {
   }
   try {
     let url = `${DM_API}/v2/update-list/?token=${encodeURIComponent(token)}&limit=500`;
-    let r = await fetch(url, { method: 'GET' });
+    let r = await fetch(url, { method: 'GET', headers: DM_HEADERS });
     let data = await r.json().catch(() => ({}));
     if (!r.ok && r.status === 404) {
       url = `${DM_API}/v2/lists/?token=${encodeURIComponent(token)}&limit=500`;
-      r = await fetch(url, { method: 'GET' });
+      r = await fetch(url, { method: 'GET', headers: DM_HEADERS });
       data = await r.json().catch(() => ({}));
     }
     if (!r.ok) {
@@ -50,32 +55,39 @@ app.get('/api/lists', async (req, res) => {
 /**
  * POST /api/leads
  * Body: { token, listId?, begin, limit, type? }
- * Proxies to DealMachine POST v2/leads/
+ * Proxies to DealMachine POST v2/leads/. Tries begin then offset if needed.
  */
 app.post('/api/leads', async (req, res) => {
   const { token, listId, begin = 0, limit = 100, type: reqType } = req.body || {};
   if (!token || typeof token !== 'string') {
     return res.status(400).json({ error: 'Missing token' });
   }
-  try {
+  const run = async (useOffset) => {
     const body = {
       token: token.trim(),
-      type: (reqType === 'all' ? 'all' : 'list'),
       sort_by: 'created_at',
       limit: Number(limit) || 100,
-      begin: Number(begin) || 0,
     };
+    if (useOffset) body.offset = Number(begin) || 0;
+    else body.begin = Number(begin) || 0;
+    if (reqType === 'all' || reqType === 'list') body.type = reqType;
     if (listId) body.list_id = listId;
     const r = await fetch(`${DM_API}/v2/leads/`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: DM_HEADERS,
       body: JSON.stringify(body),
     });
     const data = await r.json().catch(() => ({}));
-    if (!r.ok) {
-      return res.status(r.status).json(data);
+    return { ok: r.ok, status: r.status, data };
+  };
+  try {
+    let result = await run(false);
+    if (result.ok) return res.json(result.data);
+    if (result.status === 400 && result.data && /begin|offset/i.test(JSON.stringify(result.data))) {
+      result = await run(true);
     }
-    res.json(data);
+    if (!result.ok) return res.status(result.status).json(result.data || {});
+    res.json(result.data);
   } catch (e) {
     res.status(502).json({ error: 'Proxy request failed', message: e.message });
   }
