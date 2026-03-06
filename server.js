@@ -22,7 +22,7 @@ const DM_API = 'https://api.dealmachine.com';
 
 /**
  * GET /api/lists?token=xxx
- * Proxies to DealMachine v2/update-list/
+ * Proxies to DealMachine v2/update-list/ (and falls back to v2/lists/ if needed).
  */
 app.get('/api/lists', async (req, res) => {
   const token = (req.query.token || '').trim();
@@ -30,9 +30,14 @@ app.get('/api/lists', async (req, res) => {
     return res.status(400).json({ error: 'Missing token' });
   }
   try {
-    const url = `${DM_API}/v2/update-list/?token=${encodeURIComponent(token)}&limit=500`;
-    const r = await fetch(url, { method: 'GET' });
-    const data = await r.json().catch(() => ({}));
+    let url = `${DM_API}/v2/update-list/?token=${encodeURIComponent(token)}&limit=500`;
+    let r = await fetch(url, { method: 'GET' });
+    let data = await r.json().catch(() => ({}));
+    if (!r.ok && r.status === 404) {
+      url = `${DM_API}/v2/lists/?token=${encodeURIComponent(token)}&limit=500`;
+      r = await fetch(url, { method: 'GET' });
+      data = await r.json().catch(() => ({}));
+    }
     if (!r.ok) {
       return res.status(r.status).json(data);
     }
@@ -44,18 +49,18 @@ app.get('/api/lists', async (req, res) => {
 
 /**
  * POST /api/leads
- * Body: { token, listId?, begin, limit }
+ * Body: { token, listId?, begin, limit, type? }
  * Proxies to DealMachine POST v2/leads/
  */
 app.post('/api/leads', async (req, res) => {
-  const { token, listId, begin = 0, limit = 100 } = req.body || {};
+  const { token, listId, begin = 0, limit = 100, type: reqType } = req.body || {};
   if (!token || typeof token !== 'string') {
     return res.status(400).json({ error: 'Missing token' });
   }
   try {
     const body = {
       token: token.trim(),
-      type: 'list',
+      type: (reqType === 'all' ? 'all' : 'list'),
       sort_by: 'created_at',
       limit: Number(limit) || 100,
       begin: Number(begin) || 0,
@@ -74,6 +79,10 @@ app.post('/api/leads', async (req, res) => {
   } catch (e) {
     res.status(502).json({ error: 'Proxy request failed', message: e.message });
   }
+});
+
+app.get('/', (req, res) => {
+  res.send('DealMachine proxy is running. Use the Chrome extension with this URL.');
 });
 
 app.get('/health', (req, res) => {

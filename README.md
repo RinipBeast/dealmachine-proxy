@@ -2,6 +2,27 @@
 
 This small server proxies requests to DealMachine's API so the Chrome extension can avoid CORS (the API blocks browser requests from `app.dealmachine.com` when credentials are used).
 
+## Push this code to GitHub (one-time)
+
+The code is already in a git repo with an initial commit. To put it on GitHub:
+
+1. **Create a new repo on GitHub**
+   - Go to [github.com/new](https://github.com/new).
+   - Name it (e.g. `dealmachine-proxy`).
+   - Leave it **empty** (no README, no .gitignore).
+   - Create the repo.
+
+2. **Push from your machine** (in a terminal):
+
+   ```bash
+   cd "/Users/rinip/Desktop/Dealmachine Scrapper/dealmachine-scraper/proxy-server"
+   git remote add origin https://github.com/YOUR_USERNAME/dealmachine-proxy.git
+   git push -u origin main
+   ```
+   Replace `YOUR_USERNAME` with your GitHub username (and `dealmachine-proxy` if you used a different repo name).
+
+3. **In DigitalOcean** – when you connect a repository, choose this repo and set the **source directory** to the root (or leave blank). The app should detect `package.json` and use `npm start` to run the proxy.
+
 ## Deploy to DigitalOcean App Platform
 
 1. **Create a new App**
